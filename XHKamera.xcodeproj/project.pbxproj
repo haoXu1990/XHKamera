@@ -15,6 +15,7 @@
 		69CE375E27A275490052F771 /* XHKameraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE375D27A275490052F771 /* XHKameraTests.swift */; };
 		69CE376827A275490052F771 /* XHKameraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE376727A275490052F771 /* XHKameraUITests.swift */; };
 		69CE376A27A275490052F771 /* XHKameraUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE376927A275490052F771 /* XHKameraUITestsLaunchTests.swift */; };
+		69CE377827A27FAE0052F771 /* XHCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE377727A27FAE0052F771 /* XHCameraController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +48,7 @@
 		69CE376327A275490052F771 /* XHKameraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = XHKameraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		69CE376727A275490052F771 /* XHKameraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHKameraUITests.swift; sourceTree = "<group>"; };
 		69CE376927A275490052F771 /* XHKameraUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHKameraUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		69CE377727A27FAE0052F771 /* XHCameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XHCameraController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +99,7 @@
 		69CE374527A275470052F771 /* XHKamera */ = {
 			isa = PBXGroup;
 			children = (
+				69CE377627A27F920052F771 /* Controllers */,
 				69CE374627A275470052F771 /* AppDelegate.swift */,
 				69CE374A27A275470052F771 /* ViewController.swift */,
 				69CE374C27A275470052F771 /* Main.storyboard */,
@@ -122,6 +125,14 @@
 				69CE376927A275490052F771 /* XHKameraUITestsLaunchTests.swift */,
 			);
 			path = XHKameraUITests;
+			sourceTree = "<group>";
+		};
+		69CE377627A27F920052F771 /* Controllers */ = {
+			isa = PBXGroup;
+			children = (
+				69CE377727A27FAE0052F771 /* XHCameraController.swift */,
+			);
+			path = Controllers;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -257,6 +268,7 @@
 			files = (
 				69CE374B27A275470052F771 /* ViewController.swift in Sources */,
 				69CE374727A275470052F771 /* AppDelegate.swift in Sources */,
+				69CE377827A27FAE0052F771 /* XHCameraController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
