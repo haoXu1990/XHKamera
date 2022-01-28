@@ -21,6 +21,10 @@ protocol XHCameraControllerDelegate {
 
 class XHCameraController: NSObject {
 
+    var cameraAdjustingExposureContext = "cameraAdjustingExposureContext"
+
+    static let adjustingExposureKey = "adjustingExposure"
+
     /// 视频队列
     let videoQueue = DispatchQueue.init(label: "xh.VideoQueue")
 
@@ -38,7 +42,7 @@ class XHCameraController: NSObject {
 
     var outputURL: NSURL?
 
-    init(error: NSError) {
+    override init() {
         super.init()
     }
 
@@ -124,16 +128,219 @@ extension XHCameraController {
 // Mark: - 摄像头支持的一些方法
 extension XHCameraController {
 
-    func cameraWithPosition(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+    /// @method 可用捕捉设备的数量
+    /// @abstract
+    ///   根据 AVMediaType 和 Position 返回可用捕捉设备的数量
+    /// @param deviceTypes
+    ///   媒体类型
+    /// @param position
+    ///   设备位置
+    func cameraCount(mediaType: AVMediaType = .video, position: AVCaptureDevice.Position = .back) -> Int {
+        let discoverySession = AVCaptureDevice.DiscoverySession.init(deviceTypes: [.builtInWideAngleCamera],
+                                                                     mediaType: .video,
+                                                                     position: .back )
+        return discoverySession.devices.count
+    }
+
+
+    func canSwitchCameras() -> Bool {
+        return self.cameraCount() > 1
+    }
+
+    /// 根据位置获取摄像头设备
+    func camera(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
 
         let discoverySession = AVCaptureDevice.DiscoverySession.init(deviceTypes: [.builtInWideAngleCamera],
                                                                      mediaType: .video,
                                                                      position: position)
 
-        return discoverySession.devices.first
+        let device = discoverySession.devices.filter({ $0.position == position}).first
+        return device
     }
 
+    /// 获取当前活动的设备
     func activeCamera() -> AVCaptureDevice? {
         return self.activeVideoInput?.device
+    }
+
+    /// 返回当前未激活的摄像头
+    func inactiveCamera() -> AVCaptureDevice? {
+        if self.cameraCount() > 1 {
+            if let activeCamera = activeCamera() {
+                if activeCamera.position == .back {
+                    return self.camera(position: .front)
+                } else {
+                    return self.camera(position: .back)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 切换摄像头
+    func switchCameras() throws -> Bool {
+        // 判断是否有多个摄像头
+        if self.canSwitchCameras() == false || self.activeVideoInput == nil {
+            return false
+        }
+
+        // 获取当前设备的反向设备
+        if let videoDevice = self.inactiveCamera() {
+            let videoInput = try AVCaptureDeviceInput.init(device: videoDevice)
+            // 开始配置
+            self.captureSession.beginConfiguration()
+
+            // 将捕捉回话中，原来的捕捉输入设备移出
+            self.captureSession.removeInput(self.activeVideoInput!)
+
+            // 判断新的设备能否加入
+            if self.captureSession.canAddInput(videoInput) {
+                // 添加新设备
+                self.captureSession.addInput(videoInput)
+
+                // 修改当前的活动设备
+                self.activeVideoInput = videoInput
+            } else {
+                // 新设备无法加入，把原来的设备重新加入到捕捉回话当中
+                self.captureSession.addInput(self.activeVideoInput!)
+            }
+
+            // 提交配置
+            self.captureSession.commitConfiguration()
+        }
+
+        return false
+    }
+}
+
+extension XHCameraController {
+    /// @method 当前活动的摄像头是否支持兴趣对焦(点击对焦)
+    ///
+    func cameraSuuportsTapToFocus() -> Bool {
+        return self.activeCamera()?.isFocusPointOfInterestSupported ?? false
+    }
+
+
+    /// @method 兴趣对焦
+    /// @abstract 根据 point 自动对焦
+    /// @param point
+    ///     兴趣对焦点
+    func focusAtPoin(point: CGPoint) throws -> Void {
+        guard let device = self.activeCamera() else { return }
+
+        // 判断设备是否支持兴趣点对焦和自动对焦
+        if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
+
+            // 锁定设备准备开始配置， 如果获得了锁
+            try device.lockForConfiguration()
+
+            // 设置兴趣对焦的兴趣点
+            device.focusPointOfInterest = point
+
+            // 自动对焦模式
+            device.focusMode = .autoFocus
+
+            // 释放锁
+            device.unlockForConfiguration()
+        }
+    }
+
+    /// @method 当前活动的摄像头是否支持兴趣点击曝光
+    func cameraSupportTapToExpose() -> Bool {
+        return self.activeCamera()?.isExposurePointOfInterestSupported ?? false
+    }
+
+    func focusAtPoint(point: CGPoint) throws -> Void {
+        guard let device = self.activeCamera() else { return }
+
+        // 判断设备是否支持兴趣点曝光和自动曝光
+        if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
+
+            //  锁定设备
+            try device.lockForConfiguration()
+
+            // 配置曝光点和曝光模式
+            device.exposurePointOfInterest = point
+            device.exposureMode = .autoExpose
+
+            // 检查是否支持锁定曝光模式
+            if device.isExposureModeSupported(.locked) {
+                // 利用 KVO 确定设备的 adjustingExposure 属性的状态。
+                // 这里利用 KOV 发送通知, 下面的方法接收通知后处理曝光锁定
+                device.addObserver(self, forKeyPath: XHCameraController.adjustingExposureKey, options: .new, context:&cameraAdjustingExposureContext)
+            }
+
+            // 释放设备
+            device.unlockForConfiguration()
+        }
+    }
+
+    /// KOV 监听 adjustingExposure 更改摄像头曝光模式
+    override func observeValue(forKeyPath keyPath: String?,
+                               of object: Any?,
+                               change: [NSKeyValueChangeKey : Any]?,
+                               context: UnsafeMutableRawPointer?) {
+        // 判断上下文
+        if context == &cameraAdjustingExposureContext {
+            // 判断设备是否不再调整曝光等级, 确认设备的 exposureModel 是否可以设置为 locked
+            if let device = object as? AVCaptureDevice,
+               !device.isAdjustingExposure,
+               device.isExposureModeSupported(.locked) {
+                let objectClass = object as? XHCameraController
+                // 移出监听
+                objectClass?.removeObserver(self, forKeyPath: XHCameraController.adjustingExposureKey, context: &cameraAdjustingExposureContext)
+
+                // 异步方式回到主队列
+                DispatchQueue.main.async {
+
+                    // 这里开始在主队列中修改设备
+                    do {
+                        // 锁定设备
+                        try device.lockForConfiguration()
+
+                        // 修改曝光模式
+                        device.exposureMode = .locked
+
+                        // 释放设备
+                        device.unlockForConfiguration()
+
+                    } catch _ {
+                        // 这里应该抛出错误
+                    }
+                }
+            }
+
+        } else {
+            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
+        }
+    }
+
+    func resetFocusAndExposureModes() throws -> Void {
+        guard let device = self.activeCamera() else { return }
+        
+        let canResetFocus = device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus)
+
+        let canResetExposure = device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose)
+
+        // 设备捕捉空间坐标,左上角(0, 0), 右下角(1, 1), 中心点(0.5, 0.5)
+        let centPoint: CGPoint = .init(x: 0.5, y: 0.5)
+
+        // 锁定设备
+        try device.lockForConfiguration()
+
+        // 检查是否支持兴趣点自动对焦
+        if canResetFocus {
+            device.focusMode = .autoFocus
+            device.focusPointOfInterest = centPoint
+        }
+
+        // 检查是否支持兴趣点自动曝光
+        if canResetExposure {
+            device.exposureMode = .autoExpose
+            device.exposurePointOfInterest = centPoint
+        }
+
+        // 释放设备
+        device.unlockForConfiguration()
     }
 }
